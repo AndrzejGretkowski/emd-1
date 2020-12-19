@@ -47,9 +47,9 @@ sapply(packageList, usePackage)
 
 ```
 
-## 2. Zapewnianie powtarzalności obliczeń
+## 2. Powtarzalność obliczeń
 
-Powtarzalność danych jest zapewniona najprostszym sposobem -- wywoływaniem funkcji, która ustawia ten sam seed dla generatora liczb losowych.
+Powtarzalność obliczeń jest zapewniona najprostszym sposobem -- wywoływaniem funkcji, która ustawia ten sam seed dla generatora liczb losowych.
 
 
 ```{r consistency}
@@ -116,7 +116,7 @@ cleanedData <- cleanData(fixedData)
 numericData <- cleanData(removeChrColumns(cleanedData))
 ```
 
-## 5. Rozmiar zbioru i podstawowe statystyki
+## 5. Rozmiar zbioru i statystyki
 
 Rozmiar danych przedstawiony jest poniżej.
 
@@ -145,7 +145,7 @@ cleanedData %>%
 ```
 
 
-## 6. Szczegółowa analiza wartości atrybutów
+## 6. Szczegółowa analiza atrybutów
 
 Przedstawione są histogramy wszystkich atrybutów. Możemy na nich zaobserwować niepokojące ekstrema -- wygląda to tak, jakby niektóre z krajów żyły w ciągłej biedzie, a niektóre w ciągłych luksusach (gdyż nie są to rozkłady normalne). W szczególności widać to w GDP, gdzie większość krajów znajduje się bardzo nisko, a tylko elitarnych kilka osiąga duże wartości.
 
@@ -216,7 +216,7 @@ fig
 ```
 
 
-## 8. Długość życia w zależności od krajów
+## 8. Długość życia a kraj
 
 Średnia długość życia dla różnych krajów została przedstawiona na wykresie słupkowym poniżej. Kraj o statusie “Developing” zostały oznaczone na niebiesko, podczas gdy “Developed” -- na zielono. Możemy zauważyć, iż kraje rozwinięte są przeważnie w czołówce średniej długości życia, nie znaczy to jednak, iż kraje rozwijające się są gorsze -- niektóre z nich, takie jak Kanada i Francja są lepsze od większości krajów rozwiniętych.
 
@@ -307,6 +307,8 @@ postResample(
   testingSet$Life.Expectancy)
 
 ```
+## 10. Najważniejsze atrybuty
+
 Jest to jednakże klasyfikator, które prawdobnie jest bardzo szczegółowy, gdyż ilość wybranych predyktorów wynosi 12. Kolejny regresor jest dokładnie taki sam jak poprzedni, aczkolwiek dane do jego treningu do 6 najbardziej korelujących z długością życia atrybutów. 
 
 ```{r less data, null_prefix=TRUE}
