@@ -1,0 +1,254 @@
+---
+title: "Projekt 1"
+author: "Andrzej Gretkowski"
+date: "16/12/2020"
+output: 
+  html_document:
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Podsumowanie
+
+
+
+## 1. Wyliczanie bibliotek
+
+```{r library enumeration, echo=TRUE}
+usePackage <- function(p) {
+    if (!is.element(p, installed.packages()[,1]))
+        install.packages(p, dep = TRUE, verbose = FALSE)
+    require(p, character.only = TRUE, quietly = TRUE)
+}
+
+packageList <- c("dplyr", "matrixStats", "tidyr", "caret", "ggcorrplot", "plotly")
+
+print("Użyte biblioteki to:")
+packageList
+
+```
+```{r library installation, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sapply(packageList, usePackage)
+
+```
+
+## 2. Zapewnianie powtarzalności obliczeń
+
+```{r consistency}
+setConsistency <- function() {
+  set.seed(42)
+}
+```
+
+## 3. Ładowanie danych
+
+```{r loading}
+
+loadData <- function(urlPath, localFile = 'life_expectancy.tsv') {
+  remote_data_file <- download.file(urlPath, destfile = localFile, quiet= TRUE)
+  return(read.csv(TMP_LOCAL_FILE, quote='"'))
+}
+FILE_URL <- 'http://www.cs.put.poznan.pl/alabijak/emd/projekt/Life_Expectancy_Data.csv'
+TMP_LOCAL_FILE <- 'life_expectancy.csv'
+
+data <- loadData(FILE_URL, TMP_LOCAL_FILE)
+```
+
+## 4. Przetwarzanie brakujących danych
+
+
+
+```{r fixing data}
+
+fixData <- function(df) {
+  # Rename data
+  fixedData <- rename(df,
+     Life.Expectancy = Life.expectancy,
+     Infant.Deaths = infant.deaths, 
+     Percentage.Expenditure = percentage.expenditure,
+     Under.Five.Deaths = under.five.deaths,
+     Total.Expenditure = Total.expenditure,
+     Thinness.Years.10.19 = thinness..1.19.years,
+     Thinness.Years.5.9 = thinness.5.9.years,
+     Income.Resources.Composition = Income.composition.of.resources)
+  
+  fixedData <- within(fixedData, Alcohol[is.na(Alcohol) & Year == 2015] <- 0)
+  fixedData <- within(fixedData, Total.Expenditure[is.na(Total.Expenditure) & Year == 2015] <- 0)
+
+  # fixedData$Country <- as.factor(fixedData$Country)
+  # fixedData$Status <- as.factor(fixedData$Status)
+  
+  return(fixedData)
+}
+
+cleanData <- function (df) {
+  return(na.omit(df))
+}
+  
+removeChrColumns <- function(df) {
+  library(dplyr)
+  return(df %>% 
+    select_if(~!is.character(.)))
+}
+
+fixedData <- fixData(data)
+cleanedData <- cleanData(fixedData)
+numericData <- removeChrColumns(cleanedData)
+
+```
+
+## 5. Rozmiar zbioru i podstawowe statystyki
+
+```{r data size}
+
+print(paste('Zbiór danych zawiera', nrow(cleanedData), 'przykladów.'))
+print(paste('Każdy z przykladow posiada', ncol(cleanedData), 'atrybutów.'))
+```
+
+```{r basic statistics}
+library(dplyr)
+library(tidyr)
+
+cleanedData %>%
+  tibble::as_tibble() %>% 
+  select(Life.Expectancy, Adult.Mortality, Infant.Deaths, Population) %>%
+  summarise(across(everything(), list(mean = mean, median = median, min = min, max = max), .names = "{.col}_{.fn}")) %>%
+  gather(variable, value) %>%
+  separate(variable, c("var", "funkcja"), sep = "\\_") %>%
+  spread(var, value) %>%
+  relocate(Life.Expectancy, .after = funkcja)
+
+
+```
+
+
+## 6. Szczegółowa analiza wartości atrybutów
+
+```{r attribute analysis, context="render", echo=FALSE}
+
+library(plotly)
+
+attributeNames <- colnames(numericData)
+fig <- plot_ly()
+
+buttonList <- list()
+for (i in 1:length(attributeNames)){
+  visible <- if (i == 1) TRUE else FALSE
+  fig <- fig %>% 
+    add_histogram(
+      x = pull(numericData, attributeNames[i]),
+      visible = visible,
+      name = attributeNames[i])
+  
+  visibleList <- rep(FALSE, length(attributeNames))
+  visibleList[i] <- TRUE
+  dropList <- list(
+    method = "restyle",
+    args = list("visible", visibleList),
+    label = attributeNames[i])
+  buttonList[[i]] <- dropList
+}
+fig <- fig %>% layout(
+    title = "Analiza atrybutów",
+    xaxis = list(domain = c(0.1, 1)),
+    updatemenus = list(
+      list(
+        y = 0.8,
+        buttons = buttonList)
+    )
+  )
+
+fig
+
+
+
+
+```
+
+## 7. Korelacje między zmiennymi
+
+```{r corelation}
+
+library(ggcorrplot)
+
+corr <- round(cor(numericData), 1)
+p.mat <- cor_pmat(numericData)
+
+ggcorrplot(corr, p.mat = p.mat, hc.order=TRUE, type='full', tl.cex=10, tl.srt=60)
+```
+
+
+## 8. Długość życia w zależności od krajów
+
+```{r life expectancy}
+
+library(plotly)
+
+countryNames <- unique(cleanedData$Country)
+countryData <- cleanedData %>%
+  filter(Life.Expectancy != 0) %>%
+  group_by(Country) %>%
+  dplyr::summarize(Mean.Life.Expectancy = mean(Life.Expectancy), .groups = 'drop')
+
+countryData <- arrange(countryData, desc(countryData$Mean.Life.Expectancy))
+
+fig <- plot_ly(countryData, x = ~Country, y = ~Mean.Life.Expectancy, type = 'bar')
+
+fig
+
+```
+
+
+## 9. Regresor
+
+```{r regresor}
+
+library(caret)
+
+setConsistency()
+inTraining <-
+    createDataPartition(
+        y = numericData$Life.Expectancy,
+        p = .75,
+        list = FALSE,)
+
+trainingSet <- numericData[inTraining,]
+testingSet <- numericData[-inTraining,]
+
+rfGrid <- expand.grid(mtry = seq(2, ncol(numericData) - 1))
+gridCtrl <- trainControl(
+    method = "repeatedcv",
+    number = 2,
+    repeats = 5)
+
+fitTune <- train(Life.Expectancy ~ .,
+             data = trainingSet,
+             method = "rf",
+             metric = "RMSE",
+             preProc = c("center", "scale"),
+             trControl = gridCtrl,
+             tuneGrid = rfGrid,
+             ntree = 10)
+fitTune
+
+```
+```{r fitplot}
+ggplot(fitTune) + theme_bw()
+```
+
+```{r testing}
+
+rfTuneClasses <- predict(fitTune,
+                         newdata = testingSet)
+
+postResample(
+  as.numeric(rfTuneClasses),
+  testingSet$Life.Expectancy)
+
+```
+
+

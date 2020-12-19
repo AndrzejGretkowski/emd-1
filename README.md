@@ -1,2 +1,3 @@
-# emd-1
-Eksploracja Masywnych Danych - Projekt 1
+## Description
+
+Project repository for EMD project 1.
