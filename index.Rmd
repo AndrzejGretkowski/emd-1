@@ -1,10 +1,14 @@
 ---
 title: "Projekt 1"
 author: "Andrzej Gretkowski"
-date: "16/12/2020"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
 output: 
   html_document:
-    keep_md: yes
+    toc: true
+    theme: spacelab
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
 ---
 
 ```{r setup, include=FALSE}
@@ -13,11 +17,14 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Podsumowanie
 
-
+Średnia długość życia wydaje się prostą do przewidzenia zmienną dla krajów, posiadających dane statystyczne. Klasyfikacja na poziomie 0.95 R2 jest dostatecznie wysoka, aby wykorzystywać dane statystyczne do zwiększania średniej życia w krajach -- np. poprzez inwestowanie pięniędzy bądź czasu w czynniki, które najbardziej na to wpływają -- są to między innymi poziom nauczania i ilość zgonów spowodowanych wirusem HIV.
 
 ## 1. Wyliczanie bibliotek
 
-```{r library enumeration, echo=TRUE}
+Użyte bibliotek przedstawiam poniżej. Są to biblioteki do operacji na macierzach, statystyczne, do uczenia maszynowego oraz do przedstawiania wykresów.
+
+
+```{r library enumeration, echo=TRUE, null_prefix=TRUE}
 usePackage <- function(p) {
     if (!is.element(p, installed.packages()[,1]))
         install.packages(p, dep = TRUE, verbose = FALSE)
@@ -26,10 +33,14 @@ usePackage <- function(p) {
 
 packageList <- c("dplyr", "matrixStats", "tidyr", "caret", "ggcorrplot", "plotly")
 
-print("Użyte biblioteki to:")
-packageList
+print(packageList)
 
 ```
+
+
+Instalacja bibliotek obdywa się za pomocą skryptu, z wyłączeniem logu.
+
+
 ```{r library installation, message=FALSE, warning=FALSE, paged.print=FALSE}
 
 sapply(packageList, usePackage)
@@ -38,6 +49,9 @@ sapply(packageList, usePackage)
 
 ## 2. Zapewnianie powtarzalności obliczeń
 
+Powtarzalność danych jest zapewniona najprostszym sposobem -- wywoływaniem funkcji, która ustawia ten sam seed dla generatora liczb losowych.
+
+
 ```{r consistency}
 setConsistency <- function() {
   set.seed(42)
@@ -45,6 +59,8 @@ setConsistency <- function() {
 ```
 
 ## 3. Ładowanie danych
+
+Ładowanie danych polega na pobraniu ich z internetu, a następnie załadowanie jako tabeli.
 
 ```{r loading}
 
@@ -60,6 +76,9 @@ data <- loadData(FILE_URL, TMP_LOCAL_FILE)
 
 ## 4. Przetwarzanie brakujących danych
 
+Podczas wstępnego przetwarzania danych zmieniane są nazwy kolumn, które są niejednolite. Dodatkowo, spożycie alkoholu oraz procent rządowych wydatków na ochronę zostały wyzerowane, jeśli były “NA”, a rok był 2015. Te przykłady nie były usuwane, gdyż każdy przykład nie posiadał tych danych, co może sugerować po prostu na brak danych z tych lat, a większosza ilość danych pomaga klasyfikatorom.
+
+Następnie,przykłady posiadające “NA” w jakimkolwiek atrybucie zostały usunięte, a także utworzony został dodatkowy zbiór posiadający jedynie atrybuty liczbowe.
 
 
 ```{r fixing data}
@@ -78,9 +97,6 @@ fixData <- function(df) {
   
   fixedData <- within(fixedData, Alcohol[is.na(Alcohol) & Year == 2015] <- 0)
   fixedData <- within(fixedData, Total.Expenditure[is.na(Total.Expenditure) & Year == 2015] <- 0)
-
-  # fixedData$Country <- as.factor(fixedData$Country)
-  # fixedData$Status <- as.factor(fixedData$Status)
   
   return(fixedData)
 }
@@ -97,17 +113,20 @@ removeChrColumns <- function(df) {
 
 fixedData <- fixData(data)
 cleanedData <- cleanData(fixedData)
-numericData <- removeChrColumns(cleanedData)
-
+numericData <- cleanData(removeChrColumns(cleanedData))
 ```
 
 ## 5. Rozmiar zbioru i podstawowe statystyki
 
+Rozmiar danych przedstawiony jest poniżej.
+
 ```{r data size}
 
-print(paste('Zbiór danych zawiera', nrow(cleanedData), 'przykladów.'))
-print(paste('Każdy z przykladow posiada', ncol(cleanedData), 'atrybutów.'))
+cat(paste('Zbiór danych zawiera', nrow(cleanedData), 'przykładów.\n'))
+cat(paste('Każdy z przykładow posiada', ncol(cleanedData), 'atrybutów.\n'))
 ```
+
+Do podstawowych statystyk zostało wybrane tylko kilka atrybutów. Jak możemy zaobserwować, średnia długość życia wacha się od 44 do 89 lat, ze średnią na poziomie 69 lat oraz medianą 71 lat. Jest to pozytywna wiadomość, gdyż oznacza, iż krótka długość życia występuje w niewielu krajach. Widać także bardzo duże dysproporcje w liczbie zgonów dzieci oraz na wirusa HIV.
 
 ```{r basic statistics}
 library(dplyr)
@@ -115,7 +134,7 @@ library(tidyr)
 
 cleanedData %>%
   tibble::as_tibble() %>% 
-  select(Life.Expectancy, Adult.Mortality, Infant.Deaths, Population) %>%
+  select(Life.Expectancy, Schooling, Infant.Deaths, HIV.AIDS) %>%
   summarise(across(everything(), list(mean = mean, median = median, min = min, max = max), .names = "{.col}_{.fn}")) %>%
   gather(variable, value) %>%
   separate(variable, c("var", "funkcja"), sep = "\\_") %>%
@@ -128,7 +147,9 @@ cleanedData %>%
 
 ## 6. Szczegółowa analiza wartości atrybutów
 
-```{r attribute analysis, context="render", echo=FALSE}
+Przedstawione są histogramy wszystkich atrybutów. Możemy na nich zaobserwować niepokojące ekstrema -- wygląda to tak, jakby niektóre z krajów żyły w ciągłej biedzie, a niektóre w ciągłych luksusach (gdyż nie są to rozkłady normalne). W szczególności widać to w GDP, gdzie większość krajów znajduje się bardzo nisko, a tylko elitarnych kilka osiąga duże wartości.
+
+```{r attribute analysis, context="render", echo=FALSE, warning=FALSE}
 
 library(plotly)
 
@@ -138,11 +159,14 @@ fig <- plot_ly()
 buttonList <- list()
 for (i in 1:length(attributeNames)){
   visible <- if (i == 1) TRUE else FALSE
-  fig <- fig %>% 
+  attributeData <- pull(numericData, attributeNames[i])
+  fig <- fig %>%
     add_histogram(
-      x = pull(numericData, attributeNames[i]),
+      x = attributeData,
       visible = visible,
-      name = attributeNames[i])
+      name = attributeNames[i],
+      meanline = mean(attributeData)
+      )
   
   visibleList <- rep(FALSE, length(attributeNames))
   visibleList[i] <- TRUE
@@ -153,7 +177,6 @@ for (i in 1:length(attributeNames)){
   buttonList[[i]] <- dropList
 }
 fig <- fig %>% layout(
-    title = "Analiza atrybutów",
     xaxis = list(domain = c(0.1, 1)),
     updatemenus = list(
       list(
@@ -164,25 +187,38 @@ fig <- fig %>% layout(
 
 fig
 
-
-
-
 ```
 
 ## 7. Korelacje między zmiennymi
 
+Do porównania korelacji atrybutów został zastosowany współczynnik korelacji Pearsona. Na wykresie poniżej przedstawione są (razem z odbiciem lustrzanym) wszystkie wartości. Warto wspomnieć, iż krzyżyki zaznaczone są tam, gdzie korelacja jest mniejsza niż 0.05 (tz. poziom istotności). 
+
+Możemy zauważyć, iż liczba populacji nie wpływa na długość życia. Także rok oraz procent rządowych wydatków nie jest bardzo mało skorelowany z długością życia. Może to być wynikiem różnych krajów “rozwiniętych”, gdzie procent ten jest utrzymywany na stopniu, który zapewnia odpowiedni poziom opieki medycznej (procent może się różnić, ale opieka pozostaje podobna).
+
+
 ```{r corelation}
 
 library(ggcorrplot)
+library(ggplot2)
 
-corr <- round(cor(numericData), 1)
+corr <- round(cor(numericData, method = "pearson"), 1)
 p.mat <- cor_pmat(numericData)
 
-ggcorrplot(corr, p.mat = p.mat, hc.order=TRUE, type='full', tl.cex=10, tl.srt=60)
+dev.new(width=8, height=8)
+
+gg <- ggcorrplot(corr, p.mat = p.mat, hc.order=TRUE,
+                 type='full', tl.cex=8,
+                 sig.level = 0.05, insig= "blank")
+
+fig <- ggplotly(gg)
+fig
+
 ```
 
 
 ## 8. Długość życia w zależności od krajów
+
+Średnia długość życia dla różnych krajów została przedstawiona na wykresie słupkowym poniżej. Kraj o statusie “Developing” zostały oznaczone na niebiesko, podczas gdy “Developed” -- na zielono. Możemy zauważyć, iż kraje rozwinięte są przeważnie w czołówce średniej długości życia, nie znaczy to jednak, iż kraje rozwijające się są gorsze -- niektóre z nich, takie jak Kanada i Francja są lepsze od większości krajów rozwiniętych.
 
 ```{r life expectancy}
 
@@ -191,12 +227,20 @@ library(plotly)
 countryNames <- unique(cleanedData$Country)
 countryData <- cleanedData %>%
   filter(Life.Expectancy != 0) %>%
-  group_by(Country) %>%
+  group_by(Country, Status) %>%
   dplyr::summarize(Mean.Life.Expectancy = mean(Life.Expectancy), .groups = 'drop')
 
-countryData <- arrange(countryData, desc(countryData$Mean.Life.Expectancy))
+cbPalette <- countryData$Status
+cbPalette[cbPalette == "Developed"] <- "green"
+cbPalette[cbPalette == "Developing"] <- "#56B4E9"
 
-fig <- plot_ly(countryData, x = ~Country, y = ~Mean.Life.Expectancy, type = 'bar')
+fig <- plot_ly(
+  countryData,
+  x = ~Country,
+  y = ~Mean.Life.Expectancy,
+  type = 'bar',
+  marker = list(color = cbPalette)
+  )
 
 fig
 
@@ -204,6 +248,8 @@ fig
 
 
 ## 9. Regresor
+
+Wytrenowałem regresor -- Random Forest Regressor -- na wszystkich danych numerycznych tego zbioru. Została zastosowana 2-krotna walidacja krzyżowa z 5-cio krotnym powtórzeniem. Dane zostały przeskalowane. 
 
 ```{r regresor}
 
@@ -237,18 +283,91 @@ fitTune
 
 ```
 ```{r fitplot}
-ggplot(fitTune) + theme_bw()
+
+library(ggplot2)
+library(plotly)
+gg <- ggplot(fitTune) + theme_bw()
+fig <- ggplotly(gg)
+fig
+
 ```
+
+Jak widać, regresor zwraca bardzo dobre wyniki, na poziomie 0.95 R2. Oznacza to prawdopodobnie, iż średnia jakość życia może zostać bardzo prosto oszacowana na podstawie danych o kraju.
+
 
 ```{r testing}
 
 rfTuneClasses <- predict(fitTune,
                          newdata = testingSet)
 
+cat("\nTesting set:\n")
+
 postResample(
   as.numeric(rfTuneClasses),
   testingSet$Life.Expectancy)
 
 ```
+Jest to jednakże klasyfikator, które prawdobnie jest bardzo szczegółowy, gdyż ilość wybranych predyktorów wynosi 12. Kolejny regresor jest dokładnie taki sam jak poprzedni, aczkolwiek dane do jego treningu do 6 najbardziej korelujących z długością życia atrybutów. 
 
+```{r less data, null_prefix=TRUE}
 
+library(caret)
+library(dplyr)
+
+bestCorr <- cor(numericData) %>%
+  as.data.frame() %>%
+  dplyr::select(Life.Expectancy) %>%
+  abs(.) %>%
+  arrange(desc(Life.Expectancy)) %>%
+  slice(1:7)
+
+lessData <- numericData %>%
+  dplyr::select(as.vector(row.names(bestCorr)))
+
+setConsistency()
+inTraining <-
+    createDataPartition(
+        y = lessData$Life.Expectancy,
+        p = .75,
+        list = FALSE,)
+
+trainingSet <- lessData[inTraining,]
+testingSet <- lessData[-inTraining,]
+
+rfGrid <- expand.grid(mtry = seq(2, ncol(lessData) - 1))
+gridCtrl <- trainControl(
+    method = "repeatedcv",
+    number = 2,
+    repeats = 5)
+
+fitLessTune <- train(Life.Expectancy ~ .,
+             data = trainingSet,
+             method = "rf",
+             metric = "RMSE",
+             preProc = c("center", "scale"),
+             trControl = gridCtrl,
+             tuneGrid = rfGrid,
+             ntree = 10)
+fitLessTune
+
+rfLessTuneClasses <- predict(fitLessTune,
+                         newdata = testingSet)
+
+cat("\nTesting set:\n")
+
+postResample(
+  as.numeric(rfLessTuneClasses),
+  testingSet$Life.Expectancy)
+
+```
+Jak możemy zauważyć, liczba predyktorów zmniejszyła się do 4, a wynik wzrósł. Nie jest to wzrost statystycznie coś mówiący, jednakże sam fakt, iż wynik pozostał na tym samym poziomie 0.95 R2 mówi nam, iż ten klasyfikator powinien być dużo lepszy w generalizacji dla nowych danych.
+
+```{r fitplot2}
+
+library(ggplot2)
+library(plotly)
+gg <- ggplot(fitLessTune) + theme_bw()
+fig <- ggplotly(gg)
+fig
+
+```
